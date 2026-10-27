@@ -1,5 +1,5 @@
 const { spawn } = require("child_process");
-const { existsSync, readdirSync } = require("fs");
+const { existsSync } = require("fs");
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 
@@ -58,38 +58,45 @@ async function executeZingoCliSeed(params, seed, birthday, timeout = 180000) {
       if (/Launching save task/i.test(all)) setTimeout(sendQuit, 2000);
     };
 
-test("wallet recovery output is never logged", async () => {
-  const logs = [];
-  const originalLog = console.log;
-  console.log = (...args) => logs.push(args.join(" "));
+    proc.stdout.on("data", (d) => {
+      const text = d.toString();
+      stdout += text;
+      maybeReady();
+    });
 
-  const childProcess = require("node:child_process");
-  const originalSpawn = childProcess.spawn;
-  childProcess.spawn = () => createFakeProc();
+    proc.stderr.on("data", (d) => {
+      const text = d.toString();
+      stderr += text;
+      maybeReady();
+    });
 
-  const originalExists = fs.existsSync;
-  fs.existsSync = () => true;
+    proc.stdin.on("error", (e) =>
+      console.error("ZINGO SEED STDIN:", e.message),
+    );
+    proc.on("error", (e) => finish(reject, e));
 
-  const ZingoProcess = require("../utils/zingo/ZingoProcess");
-  const proc = new ZingoProcess({
-    zingoPath: "/fake/zingo",
-    chain: "mainnet",
-    serverUrl: "http://127.0.0.1:8137",
-    dataDir: "/tmp",
+    // If the markers never appear, quit anyway after 60s.
+    const fallback = setTimeout(sendQuit, 60000);
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      finish(reject, new Error("Zingo seed restore timeout"));
+    }, timeout);
+
+    proc.on("close", (code, signal) => {
+      if (code !== 0) {
+        return finish(
+          reject,
+          new Error(`Zingo CLI exited with code ${code}: ${stderr || stdout}`),
+        );
+      }
+
+      finish(resolve, {
+        message: "Wallet restored",
+        output: stdout.replace(ANSI, ""),
+      });
+    });
   });
+}
 
-  const seed =
-    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-  proc.proc.stdout.emit("data", Buffer.from(`{"seed":"${seed}"}\n`));
-
-  await new Promise((r) => setImmediate(r));
-
-  console.log = originalLog;
-  childProcess.spawn = originalSpawn;
-  fs.existsSync = originalExists;
-
-  assert.ok(
-    !logs.join("\n").includes(seed),
-    "seed phrase must not appear in logs",
-  );
-});
+module.exports = executeZingoCliSeed;
