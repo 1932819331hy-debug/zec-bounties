@@ -21,15 +21,17 @@ async function executeZingoCliSeed(params, seed, birthday, timeout = 180000) {
     params.serverUrl || "http://127.0.0.1:8137",
     "--data-dir",
     dataDir,
-    "--seed",
-    seed,
     "--birthday",
     String(birthday || 0),
   ];
 
   return new Promise((resolve, reject) => {
     // stdin must stay open: the REPL exits on EOF.
-    const proc = spawn(zingoPath, args, { stdio: ["pipe", "pipe", "pipe"] });
+    // ZINGO_SEED (zingolib 6.0.0+) keeps the seed out of the process list.
+    const proc = spawn(zingoPath, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ZINGO_SEED: seed },
+    });
 
     let stdout = "";
     let stderr = "";
