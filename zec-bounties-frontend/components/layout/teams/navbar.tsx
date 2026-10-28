@@ -512,7 +512,7 @@ export function TeamNavbar({
                   rescanStatus={teamRescanStatus}
                   rescanLoading={teamRescanLoading}
                   rescanHidden={rescanHidden}
-                  onRescan={() => rescanTeamWallet(currentTeam.id)}
+                  onRescan={() => currentTeam && rescanTeamWallet(currentTeam.id)}
                 />
                 <NavDivider />
               </TooltipProvider>
